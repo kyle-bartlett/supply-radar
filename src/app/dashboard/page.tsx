@@ -7,6 +7,7 @@ import Sidebar from '@/components/Sidebar';
 import NLSearchBar from '@/components/NLSearchBar';
 import AnalyticsTab from '@/components/AnalyticsTab';
 import WhatIfTab from '@/components/WhatIfTab';
+import type { ScenarioImpact } from '@/lib/askEngine';
 
 const MapView = dynamic(() => import('@/components/MapView'), { 
   ssr: false,
@@ -19,6 +20,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>('map');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [scenario, setScenario] = useState<ScenarioImpact | null>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -93,7 +95,9 @@ export default function DashboardPage() {
 
         {/* Center: NL Search */}
         <div className="flex-1 max-w-xl mx-8">
-          <NLSearchBar />
+          <NLSearchBar
+            onScenario={(s) => { setScenario(s); setActiveTab('map'); }}
+          />
         </div>
 
         {/* Right: Controls */}
@@ -135,7 +139,7 @@ export default function DashboardPage() {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <MapView />
+                <MapView scenario={scenario} onClearScenario={() => setScenario(null)} />
               </motion.div>
             )}
             {activeTab === 'analytics' && (

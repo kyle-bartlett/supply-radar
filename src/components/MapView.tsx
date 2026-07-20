@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { suppliers, ports, shipments, riskRegions } from '@/data/demo';
+import type { ScenarioImpact } from '@/lib/askEngine';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type PopupData = {
@@ -12,12 +13,32 @@ type PopupData = {
   position: { x: number; y: number };
 } | null;
 
-export default function MapView() {
+// planar degree distance (map-scale proximity)
+function distDeg(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const dLat = aLat - bLat;
+  const dLng = (aLng - bLng) * Math.cos(((aLat + bLat) / 2) * (Math.PI / 180));
+  return Math.sqrt(dLat * dLat + dLng * dLng);
+}
+
+// Bend a route away from the epicenter to visualize a reroute.
+function detour(wp: [number, number][], epi: { lat: number; lng: number }): [number, number][] {
+  return wp.map(([lat, lng]) => {
+    const d = distDeg(lat, lng, epi.lat, epi.lng);
+    if (d < 25 && d > 0.01) {
+      const push = ((25 - d) / 25) * 8;
+      return [lat + ((lat - epi.lat) / d) * push, lng + ((lng - epi.lng) / d) * push] as [number, number];
+    }
+    return [lat, lng] as [number, number];
+  });
+}
+
+export default function MapView({ scenario = null, onClearScenario }: { scenario?: ScenarioImpact | null; onClearScenario?: () => void }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const [popup, setPopup] = useState<PopupData>(null);
   const animFrameRef = useRef<number>(0);
   const shipmentMarkersRef = useRef<L.Marker[]>([]);
+  const scenarioLayerRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -202,9 +223,92 @@ export default function MapView() {
     };
   }, []);
 
+  // Scenario overlay: impact zone + rerouted lanes on top of the base map.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // Clear any prior scenario layer
+    if (scenarioLayerRef.current) {
+      scenarioLayerRef.current.remove();
+      scenarioLayerRef.current = null;
+    }
+    if (!scenario) return;
+
+    const sevColor =
+      scenario.severity === 'critical' || scenario.severity === 'high' ? '#EF4444'
+      : scenario.severity === 'medium' ? '#F59E0B' : '#FACC15';
+    const layer = L.layerGroup().addTo(map);
+    scenarioLayerRef.current = layer;
+
+    const epi = scenario.epicenter;
+    const radiusM = (scenario.severity === 'high' || scenario.severity === 'critical' ? 1200 : scenario.severity === 'medium' ? 850 : 550) * 1000;
+
+    // Impact zone rings
+    L.circle([epi.lat, epi.lng], { radius: radiusM, color: sevColor, weight: 1.5, fillColor: sevColor, fillOpacity: 0.12, dashArray: '4 4' }).addTo(layer);
+    L.circle([epi.lat, epi.lng], { radius: radiusM * 0.5, color: sevColor, weight: 1, fillColor: sevColor, fillOpacity: 0.18 }).addTo(layer);
+    L.marker([epi.lat, epi.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div style="transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;">
+          <div style="width:16px;height:16px;border-radius:50%;background:${sevColor};box-shadow:0 0 16px ${sevColor};animation:pulse 1.6s infinite;"></div>
+          <div style="margin-top:4px;white-space:nowrap;font-size:10px;font-weight:600;color:#fff;background:rgba(10,14,26,0.9);padding:2px 6px;border-radius:4px;border:1px solid ${sevColor};">⚠ ${epi.label}</div>
+        </div>`,
+      }),
+    }).addTo(layer);
+
+    // Rerouted lanes for affected shipments
+    const affected = new Set(scenario.affectedShipmentIds);
+    shipments.filter((s) => affected.has(s.id)).forEach((s) => {
+      // dim original with a red overlay, draw amber detour on top
+      L.polyline(s.waypoints, { color: '#EF4444', weight: 2, opacity: 0.35, dashArray: '2 6' }).addTo(layer);
+      const rerouted = detour(s.waypoints, epi);
+      L.polyline(rerouted, { color: sevColor, weight: 3, opacity: 0.95, dashArray: '8 6' }).addTo(layer);
+    });
+
+    // Flag affected ports
+    const affPorts = new Set(scenario.affectedPortIds);
+    ports.filter((p) => affPorts.has(p.id)).forEach((p) => {
+      L.circleMarker([p.lat, p.lng], { radius: 12, color: sevColor, weight: 2, fillColor: sevColor, fillOpacity: 0.25 }).addTo(layer);
+    });
+
+    return () => {
+      layer.remove();
+      if (scenarioLayerRef.current === layer) scenarioLayerRef.current = null;
+    };
+  }, [scenario]);
+
   return (
     <div className="relative w-full h-full">
       <div ref={mapRef} className="w-full h-full" />
+
+      {/* Scenario banner */}
+      <AnimatePresence>
+        {scenario && (
+          <motion.div
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-[1200] glass-card px-4 py-2.5 flex items-center gap-3"
+            style={{ borderColor: 'rgba(239,68,68,0.4)', maxWidth: '90%' }}
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+          >
+            <span className="text-lg">🌀</span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-white truncate">SIMULATING: {scenario.title}</p>
+              <p className="text-[10px] text-[#94A3B8]">
+                {scenario.affectedShipmentIds.length} lanes rerouted · {scenario.affectedPortIds.length} ports flagged · risk +{scenario.riskDelta}
+              </p>
+            </div>
+            <button
+              onClick={() => onClearScenario?.()}
+              className="ml-2 text-[10px] px-2.5 py-1 rounded-md cursor-pointer shrink-0"
+              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.4)', color: '#FCA5A5' }}
+            >
+              Reset
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Map Legend */}
       <div className="absolute bottom-6 left-6 z-[1000] glass-card p-4" style={{ minWidth: '200px' }}>
