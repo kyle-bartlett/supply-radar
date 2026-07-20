@@ -136,9 +136,44 @@ export interface RiskForecast {
 }
 
 // ============================================================
+// DYNAMIC DATE ANCHORING
+// Data was authored against REF_NOW. At runtime every date is shifted by
+// (real now − REF_NOW) so the dashboard always reads as live and current,
+// no matter when it is viewed. Relative timing between events is preserved.
+// ============================================================
+const REF_NOW = new Date('2026-02-27T12:00:00Z');
+const NOW = new Date();
+const SHIFT_MS = NOW.getTime() - REF_NOW.getTime();
+const shiftYmd = (iso: string): string =>
+  new Date(new Date(iso).getTime() + SHIFT_MS).toISOString().slice(0, 10);
+const shiftIso = (iso: string): string =>
+  new Date(new Date(iso).getTime() + SHIFT_MS).toISOString();
+const lastNMonths = (n: number): string[] => {
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(NOW.getFullYear(), NOW.getMonth() - i, 1);
+    out.push(d.toLocaleString('en-US', { month: 'short', year: 'numeric' }));
+  }
+  return out;
+};
+const upcomingWeekLabels = (n: number): string[] => {
+  const mon = (d: Date) => d.toLocaleString('en-US', { month: 'short' });
+  const out: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const start = new Date(NOW); start.setDate(start.getDate() + i * 7);
+    const end = new Date(start); end.setDate(end.getDate() + 6);
+    out.push(mon(start) === mon(end)
+      ? `${mon(start)} ${start.getDate()}-${end.getDate()}`
+      : `${mon(start)} ${start.getDate()}-${mon(end)} ${end.getDate()}`);
+  }
+  return out;
+};
+const KPI_MONTHS = lastNMonths(12);
+
+// ============================================================
 // SUPPLIERS (15 across 6 countries)
 // ============================================================
-export const suppliers: Supplier[] = [
+const suppliersRaw: Supplier[] = [
   {
     id: 'sup-001', name: 'Shenzhen PowerTech Co.', country: 'China', city: 'Shenzhen',
     lat: 22.5431, lng: 114.0579, products: ['USB-C Cables', 'Lightning Cables', 'Power Strips'],
@@ -230,6 +265,7 @@ export const suppliers: Supplier[] = [
     costScore: 62, capacityScore: 82, lastDeliveryDate: '2026-02-17', lastDeliveryStatus: 'on-time', tier: 'Tier 1'
   },
 ];
+export const suppliers: Supplier[] = suppliersRaw.map(s => ({ ...s, lastDeliveryDate: shiftYmd(s.lastDeliveryDate) }));
 
 // ============================================================
 // PORTS (6 major global ports)
@@ -276,7 +312,7 @@ export const ports: Port[] = [
 // ============================================================
 // SHIPMENTS (8 active)
 // ============================================================
-export const shipments: Shipment[] = [
+const shipmentsRaw: Shipment[] = [
   {
     id: 'ship-001', vesselName: 'MV Pacific Voyager', cargo: 'USB-C Cables & Power Strips',
     origin: { name: 'Shenzhen, China', lat: 22.48, lng: 114.08 },
@@ -342,6 +378,9 @@ export const shipments: Shipment[] = [
     eta: '2026-02-28', status: 'on-time', delayDays: 0, progress: 0.88, supplierId: 'sup-010'
   },
 ];
+export const shipments: Shipment[] = shipmentsRaw.map(s => ({
+  ...s, departureDate: shiftYmd(s.departureDate), eta: shiftYmd(s.eta),
+}));
 
 // ============================================================
 // WAREHOUSE DESTINATIONS
@@ -355,7 +394,7 @@ export const warehouses = [
 // ============================================================
 // ALERTS (12 alerts of varying severity)
 // ============================================================
-export const alerts: Alert[] = [
+const alertsRaw: Alert[] = [
   {
     id: 'alert-001', severity: 'critical', title: 'Port of Shenzhen: 3-Day Congestion Delay',
     description: 'Vessel backlog at Yantian terminal has increased 40% this week. All outbound shipments from Shenzhen facing 3+ day delays. 47 vessels currently in queue.',
@@ -417,42 +456,45 @@ export const alerts: Alert[] = [
     timestamp: '2026-02-22T16:00:00Z', category: 'compliance', isRead: true
   },
 ];
+export const alerts: Alert[] = alertsRaw.map(a => ({ ...a, timestamp: shiftIso(a.timestamp) }));
 
 // ============================================================
-// KPI HISTORY (12 months)
+// KPI HISTORY (12 months — labels roll forward so latest month is current)
 // ============================================================
-export const kpiHistory: KPIData[] = [
-  { month: 'Mar 2025', onTimeDelivery: 88, avgLeadTime: 26, inventoryCoverage: 42, costPerUnit: 12.80, totalShipments: 145, disruptionCount: 2 },
-  { month: 'Apr 2025', onTimeDelivery: 91, avgLeadTime: 24, inventoryCoverage: 45, costPerUnit: 12.50, totalShipments: 162, disruptionCount: 1 },
-  { month: 'May 2025', onTimeDelivery: 89, avgLeadTime: 25, inventoryCoverage: 40, costPerUnit: 13.10, totalShipments: 158, disruptionCount: 3 },
-  { month: 'Jun 2025', onTimeDelivery: 85, avgLeadTime: 28, inventoryCoverage: 38, costPerUnit: 13.80, totalShipments: 171, disruptionCount: 4 },
-  { month: 'Jul 2025', onTimeDelivery: 82, avgLeadTime: 30, inventoryCoverage: 35, costPerUnit: 14.20, totalShipments: 180, disruptionCount: 5 },
-  { month: 'Aug 2025', onTimeDelivery: 86, avgLeadTime: 27, inventoryCoverage: 39, costPerUnit: 13.60, totalShipments: 175, disruptionCount: 3 },
-  { month: 'Sep 2025', onTimeDelivery: 90, avgLeadTime: 24, inventoryCoverage: 44, costPerUnit: 12.90, totalShipments: 168, disruptionCount: 2 },
-  { month: 'Oct 2025', onTimeDelivery: 92, avgLeadTime: 23, inventoryCoverage: 46, costPerUnit: 12.40, totalShipments: 195, disruptionCount: 1 },
-  { month: 'Nov 2025', onTimeDelivery: 87, avgLeadTime: 26, inventoryCoverage: 48, costPerUnit: 12.70, totalShipments: 210, disruptionCount: 3 },
-  { month: 'Dec 2025', onTimeDelivery: 83, avgLeadTime: 29, inventoryCoverage: 50, costPerUnit: 13.30, totalShipments: 225, disruptionCount: 4 },
-  { month: 'Jan 2026', onTimeDelivery: 89, avgLeadTime: 25, inventoryCoverage: 43, costPerUnit: 13.00, totalShipments: 188, disruptionCount: 2 },
-  { month: 'Feb 2026', onTimeDelivery: 91, avgLeadTime: 24, inventoryCoverage: 41, costPerUnit: 13.50, totalShipments: 178, disruptionCount: 3 },
+const kpiValues: Omit<KPIData, 'month'>[] = [
+  { onTimeDelivery: 88, avgLeadTime: 26, inventoryCoverage: 42, costPerUnit: 12.80, totalShipments: 145, disruptionCount: 2 },
+  { onTimeDelivery: 91, avgLeadTime: 24, inventoryCoverage: 45, costPerUnit: 12.50, totalShipments: 162, disruptionCount: 1 },
+  { onTimeDelivery: 89, avgLeadTime: 25, inventoryCoverage: 40, costPerUnit: 13.10, totalShipments: 158, disruptionCount: 3 },
+  { onTimeDelivery: 85, avgLeadTime: 28, inventoryCoverage: 38, costPerUnit: 13.80, totalShipments: 171, disruptionCount: 4 },
+  { onTimeDelivery: 82, avgLeadTime: 30, inventoryCoverage: 35, costPerUnit: 14.20, totalShipments: 180, disruptionCount: 5 },
+  { onTimeDelivery: 86, avgLeadTime: 27, inventoryCoverage: 39, costPerUnit: 13.60, totalShipments: 175, disruptionCount: 3 },
+  { onTimeDelivery: 90, avgLeadTime: 24, inventoryCoverage: 44, costPerUnit: 12.90, totalShipments: 168, disruptionCount: 2 },
+  { onTimeDelivery: 92, avgLeadTime: 23, inventoryCoverage: 46, costPerUnit: 12.40, totalShipments: 195, disruptionCount: 1 },
+  { onTimeDelivery: 87, avgLeadTime: 26, inventoryCoverage: 48, costPerUnit: 12.70, totalShipments: 210, disruptionCount: 3 },
+  { onTimeDelivery: 83, avgLeadTime: 29, inventoryCoverage: 50, costPerUnit: 13.30, totalShipments: 225, disruptionCount: 4 },
+  { onTimeDelivery: 89, avgLeadTime: 25, inventoryCoverage: 43, costPerUnit: 13.00, totalShipments: 188, disruptionCount: 2 },
+  { onTimeDelivery: 91, avgLeadTime: 24, inventoryCoverage: 41, costPerUnit: 13.50, totalShipments: 178, disruptionCount: 3 },
 ];
+export const kpiHistory: KPIData[] = kpiValues.map((v, i) => ({ month: KPI_MONTHS[i], ...v }));
 
 // ============================================================
-// COST BREAKDOWN (12 months)
+// COST BREAKDOWN (12 months — labels roll forward)
 // ============================================================
-export const costBreakdown: CostBreakdown[] = [
-  { month: 'Mar 2025', freight: 6.20, duties: 3.10, insurance: 1.80, handling: 1.70 },
-  { month: 'Apr 2025', freight: 5.90, duties: 3.10, insurance: 1.80, handling: 1.70 },
-  { month: 'May 2025', freight: 6.40, duties: 3.20, insurance: 1.80, handling: 1.70 },
-  { month: 'Jun 2025', freight: 6.80, duties: 3.30, insurance: 1.90, handling: 1.80 },
-  { month: 'Jul 2025', freight: 7.20, duties: 3.30, insurance: 1.90, handling: 1.80 },
-  { month: 'Aug 2025', freight: 6.60, duties: 3.30, insurance: 1.90, handling: 1.80 },
-  { month: 'Sep 2025', freight: 6.10, duties: 3.20, insurance: 1.80, handling: 1.80 },
-  { month: 'Oct 2025', freight: 5.80, duties: 3.10, insurance: 1.80, handling: 1.70 },
-  { month: 'Nov 2025', freight: 6.10, duties: 3.10, insurance: 1.80, handling: 1.70 },
-  { month: 'Dec 2025', freight: 6.50, duties: 3.20, insurance: 1.80, handling: 1.80 },
-  { month: 'Jan 2026', freight: 6.20, duties: 3.20, insurance: 1.80, handling: 1.80 },
-  { month: 'Feb 2026', freight: 6.60, duties: 3.30, insurance: 1.80, handling: 1.80 },
+const costValues: Omit<CostBreakdown, 'month'>[] = [
+  { freight: 6.20, duties: 3.10, insurance: 1.80, handling: 1.70 },
+  { freight: 5.90, duties: 3.10, insurance: 1.80, handling: 1.70 },
+  { freight: 6.40, duties: 3.20, insurance: 1.80, handling: 1.70 },
+  { freight: 6.80, duties: 3.30, insurance: 1.90, handling: 1.80 },
+  { freight: 7.20, duties: 3.30, insurance: 1.90, handling: 1.80 },
+  { freight: 6.60, duties: 3.30, insurance: 1.90, handling: 1.80 },
+  { freight: 6.10, duties: 3.20, insurance: 1.80, handling: 1.80 },
+  { freight: 5.80, duties: 3.10, insurance: 1.80, handling: 1.70 },
+  { freight: 6.10, duties: 3.10, insurance: 1.80, handling: 1.70 },
+  { freight: 6.50, duties: 3.20, insurance: 1.80, handling: 1.80 },
+  { freight: 6.20, duties: 3.20, insurance: 1.80, handling: 1.80 },
+  { freight: 6.60, duties: 3.30, insurance: 1.80, handling: 1.80 },
 ];
+export const costBreakdown: CostBreakdown[] = costValues.map((v, i) => ({ month: KPI_MONTHS[i], ...v }));
 
 // ============================================================
 // LEAD TIME TRENDS (by supplier per month)
@@ -468,7 +510,7 @@ export const leadTimeTrends = suppliers.slice(0, 6).map(supplier => ({
 // ============================================================
 // DISRUPTION HISTORY
 // ============================================================
-export const disruptionHistory: DisruptionEvent[] = [
+const disruptionHistoryRaw: DisruptionEvent[] = [
   {
     id: 'dis-001', date: '2025-07-15', title: 'Typhoon Nepartak — South China Sea',
     description: 'Category 3 typhoon disrupted shipping lanes for 8 days. 12 shipments delayed, 3 rerouted via northern Pacific.',
@@ -500,11 +542,12 @@ export const disruptionHistory: DisruptionEvent[] = [
     impact: 'medium', durationDays: 30, revenueImpact: 3500000, resolution: 'Negotiated partial allocation recovery; qualified Taipei ChipFoundry as second source'
   },
 ];
+export const disruptionHistory: DisruptionEvent[] = disruptionHistoryRaw.map(d => ({ ...d, date: shiftYmd(d.date) }));
 
 // ============================================================
-// RISK FORECASTS (next 4 weeks)
+// RISK FORECASTS (next 4 weeks — week labels roll forward from today)
 // ============================================================
-export const riskForecasts: RiskForecast[] = [
+const riskForecastsRaw: RiskForecast[] = [
   {
     week: 'Mar 1-7', overallRisk: 62, portRisk: 75, supplierRisk: 55, weatherRisk: 70, marketRisk: 48,
     prediction: 'Elevated risk due to Typhoon Maysak approaching South China Sea. Port of Shenzhen congestion expected to worsen. Recommend pre-positioning inventory.'
@@ -522,6 +565,10 @@ export const riskForecasts: RiskForecast[] = [
     prediction: 'Stable operations expected. End-of-quarter demand surge may stress Tier 2 supplier capacity. Watch semiconductor allocation closely.'
   },
 ];
+export const riskForecasts: RiskForecast[] = (() => {
+  const weeks = upcomingWeekLabels(riskForecastsRaw.length);
+  return riskForecastsRaw.map((f, i) => ({ ...f, week: weeks[i] }));
+})();
 
 // ============================================================
 // WHAT-IF SCENARIOS (5 scenarios)
@@ -605,7 +652,7 @@ export const whatIfScenarios: WhatIfScenario[] = [
 export const nlQueries: NLQuery[] = [
   {
     query: 'Show me all shipments delayed more than 3 days',
-    response: `Found **2 shipments** currently delayed more than 3 days:\n\n🚢 **MV Mumbai Merchant** — 5 days delayed\n• Cargo: Aluminum Enclosures & Heat Sinks ($800K)\n• Route: Mumbai → Rotterdam\n• Cause: Suez Canal security inspections\n• Revised ETA: March 11, 2026\n\n🚢 **MV Dragon Star** — 3 days delayed\n• Cargo: Lithium Battery Packs ($5.8M)\n• Route: Guangzhou → Long Beach\n• Cause: Shenzhen port congestion at departure\n• Revised ETA: March 8, 2026\n\n💡 **Recommendation:** Consider air-freighting critical items from the Mumbai Merchant shipment to meet EU deadlines.`,
+    response: `Found **2 shipments** currently delayed more than 3 days:\n\n🚢 **MV Mumbai Merchant** — 5 days delayed\n• Cargo: Aluminum Enclosures & Heat Sinks ($800K)\n• Route: Mumbai → Rotterdam\n• Cause: Suez Canal security inspections\n• Revised ETA: ~5 days out\n\n🚢 **MV Dragon Star** — 3 days delayed\n• Cargo: Lithium Battery Packs ($5.8M)\n• Route: Guangzhou → Long Beach\n• Cause: Shenzhen port congestion at departure\n• Revised ETA: ~3 days out\n\n💡 **Recommendation:** Consider air-freighting critical items from the Mumbai Merchant shipment to meet EU deadlines.`,
     resultType: 'table',
     data: [
       { vessel: 'MV Mumbai Merchant', delay: '5 days', cargo: '$800K', route: 'Mumbai → Rotterdam' },
