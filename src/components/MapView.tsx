@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { suppliers, ports, shipments, riskRegions } from '@/data/demo';
 import type { ScenarioImpact } from '@/lib/askEngine';
+import GasPriceTracker from '@/components/GasPriceTracker';
 import { motion, AnimatePresence } from 'framer-motion';
 
 type PopupData = {
@@ -281,6 +282,11 @@ export default function MapView({ scenario = null, onClearScenario }: { scenario
   return (
     <div className="relative w-full h-full">
       <div ref={mapRef} className="w-full h-full" />
+
+      {/* Live local gas-price tracker */}
+      <div className="absolute top-4 left-4 z-[1100]">
+        <GasPriceTracker fuelImpact={scenario?.fuelImpact ?? null} />
+      </div>
 
       {/* Scenario banner */}
       <AnimatePresence>

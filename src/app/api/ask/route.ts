@@ -4,9 +4,11 @@ import { ports, shipments, suppliers, kpiHistory, alerts } from '@/data/demo';
 import {
   heuristicAnswer,
   buildScenario,
+  estimateFuelImpact,
   type AskResult,
   type ScenarioImpact,
 } from '@/lib/askEngine';
+import { getBaseline } from '@/lib/gas';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,18 +27,31 @@ export async function POST(req: NextRequest) {
   }
 
   const key = process.env.ANTHROPIC_API_KEY;
+  let result: AskResult;
   if (!key) {
     // No key configured yet — deterministic engine still answers + drives the map.
-    return NextResponse.json(heuristicAnswer(question));
+    result = heuristicAnswer(question);
+  } else {
+    try {
+      result = await askClaude(question, key);
+    } catch (err) {
+      console.error('[ask] Claude call failed, using heuristic:', err);
+      result = heuristicAnswer(question);
+    }
   }
 
-  try {
-    const result = await askClaude(question, key);
-    return NextResponse.json(result);
-  } catch (err) {
-    console.error('[ask] Claude call failed, using heuristic:', err);
-    return NextResponse.json(heuristicAnswer(question));
+  // Attach an illustrative local gas-price impact to any scenario.
+  if (result.scenario) {
+    const baseline = await getBaseline();
+    result.scenario.fuelImpact = estimateFuelImpact({
+      baseline: baseline.price,
+      severity: result.scenario.severity,
+      text: `${question} ${result.scenario.title} ${result.scenario.summary}`,
+      region: baseline.region,
+    });
   }
+
+  return NextResponse.json(result);
 }
 
 function buildContext(): string {

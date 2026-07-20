@@ -1,12 +1,35 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { whatIfScenarios, suppliers } from '@/data/demo';
+import { estimateFuelImpact, GAS_BASELINE_FALLBACK } from '@/lib/askEngine';
+
+const TYPE_SEVERITY: Record<string, string> = {
+  natural_disaster: 'high',
+  port_closure: 'medium',
+  supplier_shutdown: 'medium',
+  tariff_change: 'low',
+};
 
 export default function WhatIfTab() {
   const [selectedScenario, setSelectedScenario] = useState<(typeof whatIfScenarios)[0] | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [gasBaseline, setGasBaseline] = useState<{ price: number; region: string }>({ price: GAS_BASELINE_FALLBACK, region: 'Houston (Gulf Coast)' });
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/gas').then((r) => r.json()).then((d) => { if (alive) setGasBaseline({ price: d.price, region: d.region }); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const fuelFor = (s: (typeof whatIfScenarios)[0]) =>
+    estimateFuelImpact({
+      baseline: gasBaseline.price,
+      severity: TYPE_SEVERITY[s.type] || 'medium',
+      text: `${s.name} ${s.description} ${s.affectedRegion}`,
+      region: gasBaseline.region,
+    });
 
   const handleSelect = (scenario: (typeof whatIfScenarios)[0]) => {
     setIsSimulating(true);
@@ -57,6 +80,10 @@ export default function WhatIfTab() {
               <div className="text-2xl mb-2">{typeIcons[scenario.type]}</div>
               <h4 className="text-xs font-semibold text-white leading-tight mb-1">{scenario.name}</h4>
               <p className="text-[10px] text-[#64748B] capitalize">{scenario.type.replace('_', ' ')}</p>
+              <div className="mt-2 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded"
+                   style={{ background: 'rgba(239,68,68,0.1)', color: '#FCA5A5' }}>
+                ⛽ +${fuelFor(scenario).deltaUsd.toFixed(2)} <span className="text-[#64748B]">gas est.</span>
+              </div>
             </motion.button>
           );
         })}
@@ -141,6 +168,24 @@ export default function WhatIfTab() {
                 color="#8B5CF6"
               />
             </div>
+
+            {/* Estimated Local Gas Impact */}
+            {(() => {
+              const f = fuelFor(selectedScenario);
+              return (
+                <div className="glass-card p-4 flex items-center justify-between gap-4" style={{ borderColor: 'rgba(239,68,68,0.3)' }}>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[#64748B] mb-1">⛽ Estimated Local Gas Impact — {f.region}</p>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm text-[#94A3B8] line-through">${f.baselineUsd.toFixed(2)}</span>
+                      <span className="text-xl font-bold text-[#FCA5A5]">${f.projectedUsd.toFixed(2)}</span>
+                      <span className="text-xs text-[#EF4444]">▲ +${f.deltaUsd.toFixed(2)} ({f.deltaPct}%)</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-[#64748B] max-w-[46%] text-right leading-tight">Illustrative model of pump-price pass-through — not a forecast.</p>
+                </div>
+              );
+            })()}
 
             {/* Side-by-Side Comparison */}
             <div className="grid grid-cols-2 gap-4">

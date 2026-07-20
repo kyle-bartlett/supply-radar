@@ -4,6 +4,16 @@
 
 import { ports, shipments, suppliers, kpiHistory, alerts, nlQueries } from '@/data/demo';
 
+export interface FuelImpact {
+  region: string;
+  baselineUsd: number;
+  projectedUsd: number;
+  deltaUsd: number;
+  deltaPct: number;
+  rationale: string;
+  estimated: true; // always an illustrative model, never a real forecast
+}
+
 export interface ScenarioImpact {
   title: string;
   summary: string;
@@ -12,6 +22,38 @@ export interface ScenarioImpact {
   epicenter: { lat: number; lng: number; label: string };
   affectedPortIds: string[];
   affectedShipmentIds: string[];
+  fuelImpact?: FuelImpact | null;
+}
+
+// Static fallback baseline (Houston / Gulf Coast regular) when EIA is unavailable.
+export const GAS_BASELINE_FALLBACK = 2.9;
+
+// Deterministic, illustrative pump-price impact model. NOT a forecast.
+// Amplifies for energy chokepoints (Hormuz/Suez), Gulf-refining weather, and war.
+export function estimateFuelImpact(opts: { baseline: number; severity: string; text: string; region?: string }): FuelImpact {
+  const t = opts.text.toLowerCase();
+  let pct = opts.severity === 'high' || opts.severity === 'critical' ? 0.03 : opts.severity === 'medium' ? 0.015 : 0.006;
+
+  if (/(strait|hormuz|suez|panama|oil|crude|opec|refiner|refining|energy|war|blockade|pipeline|tanker)/.test(t)) pct += 0.05;
+  if (
+    /(hurricane|typhoon|tropical storm|storm|flood).*(gulf|houston|texas|louisiana)/.test(t) ||
+    /(gulf|houston|texas|louisiana).*(hurricane|typhoon|tropical storm|storm|flood)/.test(t)
+  ) pct += 0.06; // Gulf Coast refining exposure
+  if (/(tariff|customs|duty)/.test(t)) pct = Math.max(pct, 0.008); // tariffs less direct at the pump
+
+  pct = Math.min(pct, 0.18); // cap at +18%
+  const baseline = +opts.baseline.toFixed(2);
+  const projected = +(baseline * (1 + pct)).toFixed(2);
+  const region = opts.region || 'Houston (Gulf Coast)';
+  return {
+    region,
+    baselineUsd: baseline,
+    projectedUsd: projected,
+    deltaUsd: +(projected - baseline).toFixed(2),
+    deltaPct: +(pct * 100).toFixed(1),
+    rationale: `Estimated ${region} pump-price move from crude / refined-product and freight cost pass-through. Illustrative model — not a forecast.`,
+    estimated: true,
+  };
 }
 
 export interface AskResult {
@@ -42,6 +84,10 @@ const PLACES: Record<string, Place> = {
   vietnam: { lat: 16.0, lng: 107.8, country: 'Vietnam', label: 'Vietnam' },
   singapore: { lat: 1.29, lng: 103.85, country: 'Singapore', label: 'Singapore' },
   suez: { lat: 30.0, lng: 32.55, country: 'Egypt', label: 'Suez Canal' },
+  hormuz: { lat: 26.57, lng: 56.25, country: '', label: 'Strait of Hormuz' },
+  'strait of hormuz': { lat: 26.57, lng: 56.25, country: '', label: 'Strait of Hormuz' },
+  'persian gulf': { lat: 26.57, lng: 56.25, country: '', label: 'Persian Gulf' },
+  malacca: { lat: 2.5, lng: 101.0, country: '', label: 'Strait of Malacca' },
   panama: { lat: 9.08, lng: -79.68, country: 'Panama', label: 'Panama Canal' },
   'south china sea': { lat: 15.0, lng: 115.0, country: '', label: 'South China Sea' },
   japan: { lat: 35.68, lng: 139.69, country: 'Japan', label: 'Japan' },
@@ -146,7 +192,7 @@ function fuzzyCanned(q: string): string | null {
 export function heuristicAnswer(question: string): AskResult {
   const t = question.toLowerCase();
 
-  if (looksLikeScenario(question) && (geocode(question) || /port|route|lane|shipment/.test(t))) {
+  if (looksLikeScenario(question) && (geocode(question) || /port|route|lane|shipment|strait|canal|oil|crude|war|tariff|supplier/.test(t))) {
     const scenario = buildScenario(question);
     if (scenario) {
       return {
