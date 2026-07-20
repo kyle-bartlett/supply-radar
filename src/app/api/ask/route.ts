@@ -9,6 +9,7 @@ import {
   type ScenarioImpact,
 } from '@/lib/askEngine';
 import { getBaseline } from '@/lib/gas';
+import { rateLimit, clientIp } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,20 @@ export async function POST(req: NextRequest) {
   }
   if (!question || typeof question !== 'string') {
     return NextResponse.json({ error: 'question required' }, { status: 400 });
+  }
+
+  // Per-IP rate limit — protects Anthropic token spend on a public endpoint.
+  const rl = rateLimit(`ask:${clientIp(req.headers)}`, 20, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      {
+        answer: `⏳ Rate limit reached — please wait ${rl.retryAfter}s before asking again. This public demo caps requests to protect API costs.`,
+        isScenario: false,
+        scenario: null,
+        source: 'heuristic',
+      },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } },
+    );
   }
 
   const key = process.env.ANTHROPIC_API_KEY;
