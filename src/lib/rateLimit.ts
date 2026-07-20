@@ -26,6 +26,10 @@ export function rateLimit(key: string, limit: number, windowMs: number): { ok: b
 }
 
 export function clientIp(headers: Headers): string {
+  // Behind Cloudflare, the real client IP is here (x-forwarded-for may hold
+  // rotating CF edge IPs, which would defeat per-IP limiting).
+  const cf = headers.get('cf-connecting-ip') || headers.get('true-client-ip');
+  if (cf) return cf.trim();
   const xff = headers.get('x-forwarded-for');
   if (xff) return xff.split(',')[0].trim();
   return headers.get('x-real-ip') || 'unknown';
