@@ -168,6 +168,13 @@ const upcomingWeekLabels = (n: number): string[] => {
   }
   return out;
 };
+// Prose helpers: quarter label N quarters from the current one, and a
+// long-form shifted date (e.g. "August 5"). Keep prose current too.
+const quarterLabel = (d: Date): string => `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`;
+const quarterFromNow = (offset: number): string =>
+  quarterLabel(new Date(NOW.getFullYear(), NOW.getMonth() + offset * 3, 1));
+const shiftedLongDate = (iso: string): string =>
+  new Date(new Date(iso).getTime() + SHIFT_MS).toLocaleString('en-US', { month: 'long', day: 'numeric' });
 const KPI_MONTHS = lastNMonths(12);
 
 // ============================================================
@@ -432,7 +439,7 @@ const alertsRaw: Alert[] = [
   },
   {
     id: 'alert-008', severity: 'info', title: 'New Trade Route: Vietnam Direct to Houston',
-    description: 'CMA CGM launching direct service from Ho Chi Minh to Houston starting March 15. Could reduce Vietnam-sourced lead times by 5-7 days.',
+    description: `CMA CGM launching direct service from Ho Chi Minh to Houston starting ${shiftedLongDate('2026-03-15')}. Could reduce Vietnam-sourced lead times by 5-7 days.`,
     timestamp: '2026-02-24T15:00:00Z', category: 'logistics', isRead: true
   },
   {
@@ -441,13 +448,13 @@ const alertsRaw: Alert[] = [
     timestamp: '2026-02-24T08:00:00Z', category: 'supplier', isRead: true
   },
   {
-    id: 'alert-010', severity: 'info', title: 'Q1 Tariff Review: No Changes Expected',
-    description: 'US Trade Representative confirms existing Section 301 tariff rates will remain unchanged through Q2 2026. No impact on current cost models.',
+    id: 'alert-010', severity: 'info', title: `${quarterFromNow(0)} Tariff Review: No Changes Expected`,
+    description: `US Trade Representative confirms existing Section 301 tariff rates will remain unchanged through ${quarterFromNow(1)}. No impact on current cost models.`,
     timestamp: '2026-02-23T14:30:00Z', category: 'compliance', isRead: true
   },
   {
     id: 'alert-011', severity: 'warning', title: 'Semiconductor Lead Time Spike: +15 Days',
-    description: 'Global semiconductor shortage affecting power management IC availability. Austin Semiconductor extending lead times by 15 days for Q2 orders.',
+    description: `Global semiconductor shortage affecting power management IC availability. Austin Semiconductor extending lead times by 15 days for ${quarterFromNow(1)} orders.`,
     timestamp: '2026-02-23T09:00:00Z', category: 'market', isRead: true
   },
   {
@@ -671,12 +678,12 @@ export const nlQueries: NLQuery[] = [
   },
   {
     query: 'What is our total inventory exposure in China?',
-    response: `**📊 China Inventory Exposure Analysis**\n\n**In-Transit from China:** 4 active shipments\n• Total cargo value: **$13.2M**\n• Total containers: 244 TEUs\n\n**By Supplier:**\n| Supplier | Value | Containers | Status |\n|----------|-------|------------|--------|\n| Shenzhen PowerTech | $2.4M | 48 | ✅ On-Time |\n| Guangzhou BatteryWorks | $5.8M | 96 | ⚠️ 3-Day Delay |\n| Dongguan SoundWave | $3.2M | 64 | 🔴 At Risk |\n| Foxlink Electronics | $1.8M | 36 | ✅ On-Time |\n\n**China Supplier Count:** 5 of 15 total (33%)\n**China Revenue Dependency:** 58% of total procurement\n\n💡 **Recommendation:** China concentration risk is elevated at 58%. Target reducing to <45% by Q3 by expanding Vietnam and Mexico supplier base.`,
+    response: `**📊 China Inventory Exposure Analysis**\n\n**In-Transit from China:** 4 active shipments\n• Total cargo value: **$13.2M**\n• Total containers: 244 TEUs\n\n**By Supplier:**\n| Supplier | Value | Containers | Status |\n|----------|-------|------------|--------|\n| Shenzhen PowerTech | $2.4M | 48 | ✅ On-Time |\n| Guangzhou BatteryWorks | $5.8M | 96 | ⚠️ 3-Day Delay |\n| Dongguan SoundWave | $3.2M | 64 | 🔴 At Risk |\n| Foxlink Electronics | $1.8M | 36 | ✅ On-Time |\n\n**China Supplier Count:** 5 of 15 total (33%)\n**China Revenue Dependency:** 58% of total procurement\n\n💡 **Recommendation:** China concentration risk is elevated at 58%. Target reducing to <45% by ${quarterFromNow(2)} by expanding Vietnam and Mexico supplier base.`,
     resultType: 'table'
   },
   {
-    query: 'Compare freight costs Q3 vs Q4 2025',
-    response: `**📊 Freight Cost Comparison: Q3 vs Q4 2025**\n\n| Metric | Q3 2025 | Q4 2025 | Change |\n|--------|---------|---------|--------|\n| Avg Freight/Unit | $6.30 | $6.13 | 📉 -2.7% |\n| Avg Duties/Unit | $3.23 | $3.13 | 📉 -3.1% |\n| Avg Insurance/Unit | $1.83 | $1.80 | 📉 -1.6% |\n| Avg Handling/Unit | $1.80 | $1.73 | 📉 -3.8% |\n| **Total Cost/Unit** | **$13.17** | **$12.80** | 📉 **-2.8%** |\n\n**Key Drivers:**\n• Q4 freight rates dropped due to carrier overcapacity on trans-Pacific lanes\n• Duties normalized after Q3 tariff review\n• Handling costs reduced with new LA terminal automation\n\n**Q1 2026 Trend:** Costs rising again (+5.5%) due to fuel surcharges and lithium price pressure\n\n💡 **Recommendation:** Lock in Q2 freight contracts now while rates are still competitive. Consider forward-buying lithium inventory at current prices.`,
+    query: `Compare freight costs ${quarterFromNow(-2)} vs ${quarterFromNow(-1)}`,
+    response: `**📊 Freight Cost Comparison: ${quarterFromNow(-2)} vs ${quarterFromNow(-1)}**\n\n| Metric | ${quarterFromNow(-2)} | ${quarterFromNow(-1)} | Change |\n|--------|---------|---------|--------|\n| Avg Freight/Unit | $6.30 | $6.13 | 📉 -2.7% |\n| Avg Duties/Unit | $3.23 | $3.13 | 📉 -3.1% |\n| Avg Insurance/Unit | $1.83 | $1.80 | 📉 -1.6% |\n| Avg Handling/Unit | $1.80 | $1.73 | 📉 -3.8% |\n| **Total Cost/Unit** | **$13.17** | **$12.80** | 📉 **-2.8%** |\n\n**Key Drivers:**\n• ${quarterFromNow(-1)} freight rates dropped due to carrier overcapacity on trans-Pacific lanes\n• Duties normalized after ${quarterFromNow(-2)} tariff review\n• Handling costs reduced with new LA terminal automation\n\n**${quarterFromNow(0)} Trend:** Costs rising again (+5.5%) due to fuel surcharges and lithium price pressure\n\n💡 **Recommendation:** Lock in ${quarterFromNow(1)} freight contracts now while rates are still competitive. Consider forward-buying lithium inventory at current prices.`,
     resultType: 'chart'
   },
 ];
