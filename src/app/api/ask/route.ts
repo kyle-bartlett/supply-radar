@@ -100,7 +100,14 @@ function buildContext(): string {
 }
 
 async function askClaude(question: string, apiKey: string): Promise<AskResult> {
-  const client = new Anthropic({ apiKey });
+  const client = new Anthropic({
+    apiKey,
+    defaultHeaders: {
+      ...(process.env.ANTHROPIC_WORKSPACE_ID
+        ? { 'anthropic-workspace-id': process.env.ANTHROPIC_WORKSPACE_ID }
+        : {}),
+    },
+  });
 
   const system =
     `You are Supply Radar AI, a supply-chain risk analyst. Answer ONLY from the live data provided. ` +
