@@ -10,11 +10,10 @@ import {
 } from '@/lib/askEngine';
 import { getBaseline } from '@/lib/gas';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
+import { resolveModel } from '@/lib/model';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const MODEL = 'claude-haiku-4-5-20251001';
 
 export async function POST(req: NextRequest) {
   let question = '';
@@ -118,7 +117,7 @@ async function askClaude(question: string, apiKey: string): Promise<AskResult> {
     `Estimate riskDelta (points added to overall network risk, 5-40). For normal questions, set is_scenario=false and scenario=null.`;
 
   const resp = await client.messages.create({
-    model: MODEL,
+    model: await resolveModel(client),
     max_tokens: 1024,
     system,
     tools: [

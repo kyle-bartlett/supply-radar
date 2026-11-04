@@ -50,17 +50,17 @@ export default function MapView({ scenario = null, onClearScenario }: { scenario
       minZoom: 2,
       maxZoom: 8,
       zoomControl: true,
-      attributionControl: false,
+      attributionControl: true,
       worldCopyJump: true,
     });
 
-    // Dark tiles
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 19,
+    // Dark tiles. Esri's Dark Gray Canvas needs no API key (CARTO's dark_all now does).
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 16,
+      attribution: 'Tiles &copy; Esri',
     }).addTo(map);
 
-    // Remove the filter for dark tiles since CartoDB dark_all is already dark
+    // Remove the filter for dark tiles since the basemap is already dark
     const tilePane = map.getPane('tilePane');
     if (tilePane) {
       tilePane.style.filter = 'none';
